@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>스텝가드 보행 모니터링 서비스 시연</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E6ECE9; --surface:#FFFFFF; --surface-2:#F1F5F3; --ink:#16302A; --muted:#566B64; --line:#D3DDD8;
+  --green:#1E7656; --green-soft:#D4EBE0; --amber:#A9650F; --amber-soft:#F8E6C8;
+  --coral:#C23E26; --coral-soft:#F9DAD2; --sky:#2A6FB6; --sky-soft:#D8E6F5;
+  --frame:#16302A; --side:#16302A; --road:#DCE4E0; --map:#F3F7F5; --sun:#E9A21F; --cloud:#AFC0BA;
+  color-scheme:light; box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0E1816; --surface:#152420; --surface-2:#1C2E29; --ink:#E2EDE9; --muted:#93A8A1; --line:#2A3E39;
+  --green:#4CC198; --green-soft:#1A3A30; --amber:#E6AA54; --amber-soft:#3A2C15;
+  --coral:#F07B62; --coral-soft:#43231C; --sky:#6DACEA; --sky-soft:#1A2F45;
+  --frame:#050C0A; --side:#0A1513; --road:#2A3B37; --map:#182824; --sun:#F2B544; --cloud:#5E716B; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --bg:#0E1816; --surface:#152420; --surface-2:#1C2E29; --ink:#E2EDE9; --muted:#93A8A1; --line:#2A3E39;
+  --green:#4CC198; --green-soft:#1A3A30; --amber:#E6AA54; --amber-soft:#3A2C15;
+  --coral:#F07B62; --coral-soft:#43231C; --sky:#6DACEA; --sky-soft:#1A2F45;
+  --frame:#050C0A; --side:#0A1513; --road:#2A3B37; --map:#182824; --sun:#F2B544; --cloud:#5E716B; color-scheme:dark;}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;font-size:15px;line-height:1.55;word-break:keep-all}
+button,textarea,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--sky);outline-offset:2px;border-radius:8px}
+
+.top{max-width:1320px;margin:0 auto;padding:22px 20px 0;display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.top h1{font-size:24px;letter-spacing:-0.02em;line-height:1.3}
+.top p{color:var(--muted);font-size:14px}
+.roles{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:4px;gap:2px}
+.roles button{border:0;background:transparent;padding:9px 16px;border-radius:10px;font-weight:600;font-size:14.5px;color:var(--muted);position:relative}
+.roles button[aria-selected="true"]{background:var(--ink);color:var(--surface)}
+.roles .dot{position:absolute;top:5px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--coral);display:none}
+.roles .dot.on{display:block}
+
+.wrap{max-width:1320px;margin:0 auto;padding:18px 20px 48px;display:grid;grid-template-columns:290px minmax(0,1fr);gap:24px;align-items:start}
+
+/* presenter */
+.panel{position:sticky;top:calc(env(safe-area-inset-top,0px) + 14px);display:grid;gap:14px}
+.card-p{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px}
+.card-p h2{font-size:15px;margin-bottom:8px}
+.scenes{display:grid;gap:6px}
+.scene{text-align:left;background:var(--surface-2);border:1.5px solid transparent;border-radius:12px;padding:9px 11px;display:grid;grid-template-columns:10px 1fr;gap:10px;align-items:start}
+.scene i{width:10px;height:10px;border-radius:50%;margin-top:6px}
+.scene b{display:block;font-size:14px}
+.scene span{font-size:12.5px;color:var(--muted)}
+.scene[aria-pressed="true"]{border-color:var(--ink);background:var(--surface)}
+.hint{font-size:13.5px;background:var(--sky-soft);border-radius:10px;padding:9px 11px}
+.log{list-style:none;display:grid;gap:7px;max-height:260px;overflow:auto}
+.log li{font-size:13px;display:grid;grid-template-columns:56px 1fr;gap:6px}
+.log li span:first-child{color:var(--muted);font-variant-numeric:tabular-nums}
+.log li b{font-weight:600}
+.log .who{font-style:normal;display:inline-block;font-size:11.5px;font-weight:600;padding:0 6px;border-radius:6px;margin-right:4px;background:var(--surface-2)}
+.log li.log-empty{display:block;font-size:13px;color:var(--muted)}
+.log li span:last-child{line-height:1.45}
+.reset{background:transparent;border:0;color:var(--muted);text-decoration:underline;text-underline-offset:3px;font-size:13.5px;justify-self:start}
+
+/* device frames */
+.stage{min-width:0}
+.phone{width:392px;max-width:100%;height:800px;border:11px solid var(--frame);border-radius:42px;background:var(--surface-2);overflow:hidden;position:relative;margin:0 auto}
+.scr{height:100%;overflow-y:auto;position:relative}
+.web{background:var(--surface-2);border:1px solid var(--line);border-radius:18px;overflow:hidden;display:grid;grid-template-columns:200px minmax(0,1fr);min-height:760px}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 24px);transform:translate(-50%,10px);background:var(--ink);color:var(--surface);padding:12px 16px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:50;max-width:min(520px,90vw)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* elder app: large, calm */
+.el{padding:22px 18px 26px;font-size:19px;line-height:1.5}
+.el-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.el-head h2{font-size:24px;line-height:1.3}
+.voice{border:2px solid var(--line);background:var(--surface);border-radius:999px;padding:8px 14px;font-size:16px;font-weight:600;display:flex;align-items:center;gap:6px}
+.voice svg{width:20px;height:20px}
+.weather{background:var(--surface);border-radius:26px;padding:18px 18px 20px;text-align:center;margin-bottom:14px;border:1px solid var(--line)}
+.weather svg{width:150px;height:118px;display:block;margin:0 auto 4px}
+.weather .say{font-size:25px;font-weight:700;line-height:1.35}
+.weather .sub{font-size:18px;color:var(--muted);margin-top:4px}
+.el-card{background:var(--surface);border-radius:22px;padding:16px 18px;margin-bottom:14px;border:1px solid var(--line)}
+.el-card h3{font-size:17px;color:var(--muted);font-weight:600;margin-bottom:6px}
+.el-card .big{font-size:21px;font-weight:700;line-height:1.4}
+.journey{margin:12px 0 4px;position:relative;height:66px}
+.journey svg{width:100%;height:66px;display:block}
+.journey .lab{fill:var(--muted);font-size:14px;font-family:inherit}
+.el-btn{width:100%;border:0;border-radius:20px;padding:18px;font-size:22px;font-weight:700;background:var(--green);color:#fff;margin-top:4px}
+.el-btn.light{background:var(--surface);color:var(--ink);border:2px solid var(--line)}
+.el-btn + .el-btn{margin-top:10px}
+.el-q{display:grid;gap:12px;margin-top:18px}
+.el-note{font-size:16px;color:var(--muted);text-align:center;margin-top:12px}
+.figure svg{width:100%;height:150px;display:block}
+.cue{border-radius:20px;padding:16px 18px;margin-bottom:14px;font-size:21px;font-weight:700;line-height:1.4;background:var(--sky-soft)}
+.cue.good{background:var(--green-soft)}
+.cue small{display:block;font-size:16px;font-weight:500;color:var(--muted);margin-top:4px}
+.feetbuzz{display:flex;justify-content:center;gap:40px;margin:6px 0 2px}
+.feetbuzz div{text-align:center;font-size:15px;color:var(--muted)}
+.feetbuzz svg{width:46px;height:84px;display:block;margin:0 auto 2px}
+.feetbuzz .sole{fill:var(--surface-2);stroke:var(--line);stroke-width:2}
+.feetbuzz .on .sole{fill:var(--sky-soft);stroke:var(--sky);stroke-width:3}
+.feetbuzz .on svg{animation:buzz .18s linear infinite}
+@keyframes buzz{0%{transform:translateX(-1.5px)}50%{transform:translateX(1.5px)}100%{transform:translateX(-1.5px)}}
+.emer{position:absolute;inset:0;background:var(--coral);color:#fff;padding:34px 22px;display:flex;flex-direction:column;justify-content:center;z-index:5}
+.emer h2{font-size:38px;line-height:1.2;margin-bottom:10px}
+.emer p{font-size:20px;line-height:1.5}
+.emer .count{font-size:22px;margin:16px 0 18px;font-weight:600}
+.emer .el-btn{background:#fff;color:#8E2614}
+.emer .el-btn.light{background:transparent;color:#fff;border:3px solid rgba(255,255,255,.8)}
+.emer .demo{margin-top:14px;background:rgba(255,255,255,.15);border:0;border-radius:12px;padding:10px;color:#fff;font-size:15px}
+.plant svg{width:150px;height:150px;display:block;margin:0 auto}
+
+/* guardian app */
+.gd{padding:16px 15px 90px;font-size:15px}
+.gd-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.gd-top b{font-size:18px}
+.gd-top span{font-size:12.5px;color:var(--muted)}
+.who{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:12px 14px;margin-bottom:12px}
+.who svg{width:44px;height:44px;flex:none}
+.who .n{font-weight:700;font-size:16.5px}
+.who .s{font-size:13px;color:var(--muted)}
+.pill{font-size:12.5px;font-weight:600;padding:4px 10px;border-radius:999px;white-space:nowrap}
+.pill.ok{background:var(--green-soft);color:var(--green)}
+.pill.warn{background:var(--amber-soft);color:var(--amber)}
+.pill.bad{background:var(--coral-soft);color:var(--coral)}
+.pill.info{background:var(--sky-soft);color:var(--sky)}
+.pill.mute{background:var(--surface-2);color:var(--muted)}
+.blk{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:12px}
+.blk h3{font-size:14.5px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:baseline;gap:2px 8px;flex-wrap:wrap}
+.blk h3 small{font-weight:400;color:var(--muted);font-size:12.5px}
+.todo{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.todo:first-of-type{border-top:0;padding-top:2px}
+.todo b{display:block;font-size:14.5px}
+.todo span{font-size:13px;color:var(--muted)}
+.sbtn{border:1px solid var(--line);background:var(--surface-2);border-radius:10px;padding:7px 11px;font-size:13px;font-weight:600;white-space:nowrap}
+.sbtn.pri{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.sbtn.done{background:var(--green-soft);color:var(--green);border-color:transparent}
+.alerts{list-style:none}
+.alerts li{display:grid;grid-template-columns:44px 1fr;gap:8px;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px}
+.alerts li:first-child{border-top:0;padding-top:0}
+.alerts time{color:var(--muted);font-variant-numeric:tabular-nums}
+.mets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.met{background:var(--surface-2);border-radius:12px;padding:10px 11px}
+.met .k{font-size:12.5px;color:var(--muted)}
+.met .v{font-size:19px;font-weight:700}
+.met .v small{font-size:12px;color:var(--muted);font-weight:500;margin-left:2px}
+.met .d{font-size:12.5px;font-weight:600}
+.d.up{color:var(--green)} .d.down{color:var(--amber)} .d.flat{color:var(--muted)}
+.plain{font-size:14px;background:var(--surface-2);border-radius:12px;padding:10px 12px;margin-top:10px}
+.plain b{display:block}
+.chart svg{width:100%;height:auto;display:block}
+.chart text{font-family:inherit;font-size:10.5px;fill:var(--muted)}
+.chart .ln{fill:none;stroke:var(--green);stroke-width:2.5;stroke-linejoin:round;stroke-linecap:round}
+.chart.warn .ln{stroke:var(--amber)}
+.chart .pt{fill:var(--green)} .chart.warn .pt{fill:var(--amber)}
+.chart .ref{stroke:var(--coral);stroke-dasharray:4 4;stroke-width:1.2}
+.chart .ref2{stroke:var(--muted);stroke-dasharray:4 4;stroke-width:1}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .bar{fill:var(--green-soft)} .chart .bar.hi{fill:var(--amber)}
+.bal{display:flex;height:12px;border-radius:6px;overflow:hidden;background:var(--surface-2);margin:6px 0 4px}
+.bal i{display:block;height:100%}
+.bal .l{background:var(--green)} .bal .r{background:var(--sky)}
+.bal-lab{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted)}
+.check{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.check:first-of-type{border-top:0}
+.check input{width:20px;height:20px;margin-top:2px;accent-color:var(--green);flex:none}
+.map svg{width:100%;height:auto;display:block;border-radius:12px;background:var(--map)}
+.map .road{stroke:var(--road);stroke-width:12;stroke-linecap:round}
+.map .usual{fill:none;stroke:var(--green);stroke-width:2.5;stroke-dasharray:2 6;stroke-linecap:round}
+.map .place{fill:var(--surface);stroke:var(--line);stroke-width:1.5}
+.map text{font-family:inherit;font-size:11px;fill:var(--muted);font-weight:500}
+.map .trail{fill:none;stroke:var(--sky);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;opacity:.7}
+.map .me{fill:var(--sky);stroke:var(--surface);stroke-width:3}
+.map .me.bad{fill:var(--coral)}
+.tabbar{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(5,1fr);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px));z-index:3}
+.tabbar button{border:0;background:transparent;font-size:12px;font-weight:600;color:var(--muted);padding:6px 2px;border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:2px;position:relative}
+.tabbar button svg{width:22px;height:22px}
+.tabbar button[aria-selected="true"]{color:var(--ink);background:var(--surface-2)}
+.tabbar .dot{position:absolute;top:3px;right:18%;width:8px;height:8px;border-radius:50%;background:var(--coral);display:none}
+.tabbar .dot.on{display:block}
+.gem{position:absolute;inset:0;background:var(--surface-2);z-index:4;overflow-y:auto;padding:16px 15px 24px}
+.gem .head{background:var(--coral);color:#fff;border-radius:16px;padding:14px;margin-bottom:12px}
+.gem .head b{display:block;font-size:19px;line-height:1.35}
+.gem .head.wander{background:var(--amber)}
+.gem .head.ok{background:var(--green)}
+.steps{list-style:none;display:grid;gap:0}
+.steps li{display:grid;grid-template-columns:22px 1fr;gap:10px;padding:8px 0;font-size:14px;position:relative}
+.steps li::before{content:"";width:12px;height:12px;border-radius:50%;border:2px solid var(--line);background:var(--surface);margin-top:4px;margin-left:4px}
+.steps li.on::before{background:var(--coral);border-color:var(--coral)}
+.steps li.done::before{background:var(--green);border-color:var(--green)}
+.steps li span{color:var(--muted);font-size:12.5px;display:block}
+.infocard .row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:13.5px}
+.infocard .row:first-of-type{border-top:0}
+.infocard .row span:last-child{font-weight:600;text-align:right}
+.gbtn{width:100%;border:0;border-radius:14px;padding:13px;font-weight:700;font-size:15px;margin-top:8px}
+.gbtn.red{background:var(--coral);color:#fff}
+.gbtn.dark{background:var(--ink);color:var(--surface)}
+.gbtn.line{background:var(--surface);border:1px solid var(--line)}
+.dev{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.dev:first-of-type{border-top:0}
+.dev b{display:block;font-size:14.5px}
+.dev span{font-size:12.5px;color:var(--muted)}
+.batt{display:flex;align-items:center;gap:6px;font-weight:600;font-size:14px}
+.batt .c{width:32px;height:14px;border:2px solid var(--muted);border-radius:4px;padding:1px}
+.batt .c i{display:block;height:100%;background:var(--green);border-radius:1px}
+.batt.low{color:var(--coral)} .batt.low .c i{background:var(--coral)}
+
+/* org web */
+.side{background:var(--side);color:#E2EDE9;padding:18px 12px;display:flex;flex-direction:column;gap:4px}
+.side .org{font-size:13px;opacity:.8;margin:0 8px 2px}
+.side .orgn{font-size:16px;font-weight:700;margin:0 8px 14px;line-height:1.35}
+.side button{border:0;background:transparent;color:#C9D8D3;text-align:left;padding:10px 12px;border-radius:10px;font-weight:600;font-size:14.5px;display:flex;justify-content:space-between;align-items:center}
+.side button[aria-selected="true"]{background:rgba(255,255,255,.12);color:#fff}
+.side .cnt{background:var(--coral);color:#fff;border-radius:999px;font-size:11.5px;padding:0 7px}
+.orgsw{margin-top:auto;display:grid;gap:4px;font-size:12.5px;opacity:.95}
+.orgsw div{display:flex;background:rgba(255,255,255,.08);border-radius:10px;padding:3px}
+.orgsw button{flex:1;padding:6px 4px;font-size:12.5px;text-align:center;justify-content:center}
+.main{padding:20px 22px 28px;min-width:0}
+.main h2{font-size:20px;margin-bottom:2px}
+.main .lead{color:var(--muted);font-size:13.5px;margin-bottom:14px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:12px 14px;border-left-width:5px}
+.kpi b{display:block;font-size:26px;line-height:1.1}
+.kpi span{font-size:13px;color:var(--muted)}
+.kpi.bad{border-left-color:var(--coral)} .kpi.warn{border-left-color:var(--amber)} .kpi.info{border-left-color:var(--sky)} .kpi.mute{border-left-color:var(--muted)}
+.tblw{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow-x:auto}
+table.t{width:100%;border-collapse:collapse;font-size:13.5px;min-width:720px}
+.t th{text-align:left;font-weight:600;color:var(--muted);font-size:12.5px;padding:10px 12px;border-bottom:1px solid var(--line);white-space:nowrap}
+.t td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+.t tr:last-child td{border-bottom:0}
+.t tbody tr{cursor:pointer}
+.t tbody tr:hover td{background:var(--surface-2)}
+.t td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.dhead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.dhead .sel{display:flex;gap:6px;flex-wrap:wrap}
+.soap{display:grid;gap:12px}
+.soap .sec{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;grid-template-columns:44px 1fr;gap:12px}
+.soap .letter{width:40px;height:40px;border-radius:10px;background:var(--ink);color:var(--surface);display:grid;place-items:center;font-weight:700;font-size:20px}
+.soap .sec h4{font-size:14.5px;margin-bottom:4px;display:flex;gap:8px;align-items:center}
+.soap ul{padding-left:18px;font-size:13.5px}
+.soap li{margin-bottom:3px}
+.soap textarea{width:100%;min-height:70px;border:1px solid var(--line);border-radius:10px;padding:9px 10px;background:var(--surface-2);resize:vertical;font-size:13.5px}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.chip{border:1px solid var(--line);background:var(--surface-2);border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:600}
+.chip[aria-pressed="true"]{background:var(--green);color:#fff;border-color:var(--green)}
+.otable{width:100%;border-collapse:collapse;font-size:13px}
+.otable th,.otable td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+.otable th{color:var(--muted);font-weight:600}
+.modal{position:fixed;inset:0;background:rgba(10,20,18,.5);display:none;align-items:center;justify-content:center;z-index:40;padding:20px}
+.modal.show{display:flex}
+.modal .box{background:var(--surface);border-radius:18px;max-width:460px;width:100%;padding:20px;max-height:85vh;overflow:auto}
+.modal h3{font-size:17px;margin-bottom:8px}
+.modal p{font-size:14.5px;margin-bottom:8px}
+.ev{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px;border-left:5px solid var(--line)}
+.ev.bad{border-left-color:var(--coral)} .ev.warn{border-left-color:var(--amber)} .ev.ok{border-left-color:var(--green)}
+.ev b{display:block;font-size:15px}
+.ev span{font-size:13px;color:var(--muted)}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:14px;padding:26px;text-align:center;color:var(--muted);font-size:14px}
+
+.tour{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 12px);z-index:30;background:var(--ink);color:var(--surface);border-radius:16px;padding:10px 10px 10px 16px;display:flex;align-items:center;gap:10px;width:min(760px,calc(100vw - 20px));box-shadow:0 8px 28px rgba(0,0,0,.28)}
+.tour[hidden]{display:none}
+.tour p{flex:1;font-size:14px;line-height:1.45;min-width:0}
+.tour p b{display:block;font-size:12.5px;opacity:.75;font-weight:600}
+.tour button{border:0;border-radius:10px;padding:9px 13px;font-weight:700;font-size:14px;background:var(--surface);color:var(--ink);white-space:nowrap}
+.tour button.ghost{background:transparent;color:var(--surface);border:1px solid rgba(127,127,127,.6)}
+.tourstart{border:0;border-radius:14px;padding:13px 14px;background:var(--ink);color:var(--surface);font-weight:700;font-size:14.5px;text-align:left}
+body.touring{padding-bottom:120px}
+body.touring .toast{bottom:calc(env(safe-area-inset-bottom,0px) + 110px)}
+@media (max-width:820px){.stage{order:1}.panel{order:2}.top p{display:none}.tour{flex-wrap:wrap}.tour p{flex-basis:100%}.tour button{flex:1}}
+@media (max-width:1100px){
+  .wrap{grid-template-columns:1fr}
+  .panel{position:static}
+  .scenes{grid-template-columns:repeat(auto-fill,minmax(200px,1fr))}
+}
+@media (max-width:820px){
+  .web{grid-template-columns:1fr}
+  .side{flex-direction:row;flex-wrap:wrap;align-items:center;padding:12px}
+  .side .org,.side .orgn{display:none}
+  .orgsw{margin-top:0;width:100%}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .grid2{grid-template-columns:1fr}
+}
+@media (max-width:460px){
+  .top,.wrap{padding-left:10px;padding-right:10px}
+  .phone{border:0;border-radius:20px;height:760px}
+  .roles button{padding:8px 10px;font-size:13.5px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>스텝가드 보행 모니터링 서비스</h1>
+    <p>같은 걸음 데이터를 어르신, 보호자, 담당 기관이 각자에게 맞는 화면으로 봅니다. 예시 데이터로 만든 시연 화면입니다.</p>
+  </div>
+  <div class="roles" role="tablist" aria-label="사용자 화면 선택">
+    <button role="tab" data-role="elder" aria-selected="true">어르신</button>
+    <button role="tab" data-role="guard" aria-selected="false">보호자<i class="dot" id="dot-guard"></i></button>
+    <button role="tab" data-role="org" aria-selected="false">요양원·보건소<i class="dot" id="dot-org"></i></button>
+  </div>
+</header>
+
+<div class="wrap">
+  <aside class="panel">
+    <button class="tourstart" id="tourstart">처음 오셨다면 8단계 체험 안내 시작</button>
+    <div class="card-p">
+      <h2>시연 시나리오</h2>
+      <div class="scenes" id="scenes"></div>
+    </div>
+    <div class="hint" id="hint"></div>
+    <div class="card-p">
+      <h2>알림 흐름</h2>
+      <ul class="log" id="log"></ul>
+    </div>
+    <button class="reset" id="reset">처음 상태로 되돌리기</button>
+  </aside>
+  <main class="stage" id="stage"></main>
+</div>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true"><div class="box" id="modal-box"></div></div>
+<div class="toast" id="toast" aria-live="polite"></div>
+<div class="tour" id="tour" hidden role="region" aria-label="체험 안내"><p id="tour-text"></p><button class="ghost" id="tour-prev">이전</button><button id="tour-next">다음</button><button class="ghost" id="tour-close" aria-label="체험 안내 닫기">닫기</button></div>
+<script>
+(function(){
+var $=function(id){return document.getElementById(id);};
+var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function now(){var d=new Date();var h=d.getHours(),m=String(d.getMinutes()).padStart(2,'0');return (h<12?'오전 ':'오후 ')+((h%12)||12)+':'+m;}
+function hhmm(){var d=new Date();return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+var toastT;function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(function(){t.classList.remove('show');},2800);}
+
+var SCENES=[
+ {id:'normal',name:'평소의 하루',desc:'경로당에 다녀오며 걸음이 안정적인 날',c:'var(--green)',role:'elder',hint:'어르신 화면에서 “걷기 시작”을 눌러 보세요. 보호자·기관 화면도 같은 데이터를 다른 방식으로 보여줍니다.'},
+ {id:'change',name:'걸음 변화 감지',desc:'걸음이 느려지고 왼발에 힘이 덜 실림',c:'var(--amber)',role:'guard',hint:'보호자 홈의 “이번 주 할 일”과 걸음 변화 탭을 본 뒤, 요양원·보건소 화면에서 주의 대상으로 올라온 것을 확인해 보세요.'},
+ {id:'walk',name:'걷는 중 교정',desc:'쏠림을 감지해 신발이 진동으로 알림',c:'var(--sky)',role:'elder',hint:'왼발이 진동한 뒤 몇 초 지나면 걸음이 고르게 바뀝니다. “걷기 마치기”로 결과 화면까지 이어집니다.'},
+ {id:'wander',name:'배회 감지',desc:'평소 길을 벗어나 같은 곳을 맴돎',c:'var(--ink)',role:'guard',hint:'보호자 위치 화면에서 이동 경로를 지켜보세요. 같은 곳을 맴돌면 알림이 뜨고, 어르신 화면에는 집으로 가는 길 안내가 나옵니다.'},
+ {id:'fall',name:'낙상 감지',desc:'어르신 확인 → 보호자 → 기관·119 단계 알림',c:'var(--coral)',role:'elder',hint:'어르신이 10초 동안 답하지 않으면 보호자에게, 다시 10초 뒤에는 기관과 119에 알림이 갑니다. 역할 탭의 빨간 점을 따라가 보세요.'},
+ {id:'device',name:'기기 확인 필요',desc:'제어 모듈 배터리가 12% 남음',c:'var(--muted)',role:'guard',hint:'보호자 기기 탭과 기관 전체 현황의 “기기 확인” 목록을 확인해 보세요.'}
+];
+
+var BASE={weather:'sun',say:'오늘 걸음은 맑음이에요',sub:'어제보다 발걸음이 가벼워요',pace:2,speed:0.96,avg:0.95,stride:52,strideAvg:51,cad:104,balL:48,sway:2,swayAvg:2,steps:4320,
+ trend:[0.86,0.87,0.88,0.89,0.90,0.91,0.92,0.93,0.94,0.95,0.95,0.96],balT:[45,46,46,47,47,48,48,48,49,48,48,48],slots:[1,0,1,0,0,0],goal:0.7,goalNote:'골목 끝 쉼터까지 쉬지 않고 다녀오셨어요',hall:5,fear:[2,2,1,1,1,1],plant:3,batt:76,status:'ok'};
+var CHANGE={weather:'part',say:'오늘 걸음은 구름 조금이에요',sub:'천천히, 왼발도 꾹 딛어 걸어 보세요',pace:0,speed:0.83,stride:45,cad:92,balL:39,sway:6,steps:2380,
+ trend:[0.86,0.87,0.88,0.89,0.90,0.91,0.92,0.94,0.95,0.92,0.88,0.83],balT:[45,46,46,47,47,48,48,48,48,46,42,39],slots:[5,1,0,0,1,1],goal:0.55,goalNote:'이번 주는 골목 중간까지 다녀오셨어요',hall:3,fear:[2,1,1,1,2,2],plant:2,status:'warn'};
+
+var PEOPLE=[
+ {id:'p1',name:'박영수',age:84,st:'bad',why:'보행 속도 0.74m/s, 참고선 아래 3주째',sp:0.74,ch:-9,bl:44,sw:5},
+ {id:'p2',name:'이말순',age:79,st:'warn',why:'휘청임 평소의 2.5배',sp:0.88,ch:-4,bl:46,sw:7},
+ {id:'p3',name:'정옥자',age:86,st:'info',why:'하루 걸음 수 평소의 40%, 3일째',sp:0.81,ch:-6,bl:47,sw:3},
+ {id:'p4',name:'오상철',age:80,st:'mute',why:'제어 모듈 미착용 2일',sp:0.90,ch:0,bl:49,sw:2},
+ {id:'p5',name:'윤금순',age:88,st:'warn',why:'좌우 균형 36 : 64',sp:0.84,ch:-5,bl:36,sw:4},
+ {id:'p6',name:'조순이',age:85,st:'info',why:'외출 0회, 5일째',sp:0.82,ch:-3,bl:47,sw:2},
+ {id:'p7',name:'최정호',age:77,st:'ok',why:'',sp:1.02,ch:3,bl:49,sw:1},
+ {id:'p8',name:'한복례',age:82,st:'ok',why:'',sp:0.93,ch:2,bl:48,sw:2},
+ {id:'p9',name:'강덕수',age:75,st:'ok',why:'',sp:1.08,ch:1,bl:50,sw:1},
+ {id:'p10',name:'서영희',age:83,st:'ok',why:'',sp:0.91,ch:4,bl:47,sw:2},
+ {id:'p11',name:'임명자',age:78,st:'ok',why:'',sp:0.99,ch:5,bl:48,sw:1}
+];
+var ST={bad:['우선 관리','bad'],warn:['주의','warn'],info:['안부 확인','info'],mute:['기기 확인','mute'],ok:['안정','ok']};
+var ORDER={bad:0,warn:1,info:2,mute:3,ok:4};
+var SLOT_LABELS=['새벽','오전','점심','오후','저녁','밤'];
+var DONG=['한빛동','새솔동','한빛동','온누리동','새솔동','한빛동','온누리동','새솔동','한빛동','온누리동','새솔동'];
+
+var S,timers=[],fallTimer=null,walkTimer=null,moveTimer=null;
+function fresh(){return {scene:'normal',role:'elder',el:'home',gt:'home',ot:'overview',orgType:'bogun',person:'me',d:Object.assign({},BASE),
+ log:[],dots:{guard:false,org:false},fall:null,walkCue:0,walkSteps:0,practice:null,conf:null,checks:{},todoDone:{},route:null,wander:null,soap:{A:'',P:[]},memoShared:false};}
+
+function M(){return S.d;}
+function addLog(who,text){S.log.unshift({t:hhmm(),who:who,text:text});renderLog();}
+function dot(role,on){S.dots[role]=on;$('dot-'+role).classList.toggle('on',on&&S.role!==role);}
+
+/* ---------- SVG helpers ---------- */
+function weatherSVG(k){
+ var cloud='<g fill="var(--cloud)"><circle cx="78" cy="72" r="22"/><circle cx="102" cy="62" r="27"/><circle cx="126" cy="76" r="18"/><rect x="58" y="72" width="86" height="26" rx="13"/></g>';
+ var sun=function(cx,cy,r){var s='<g stroke="var(--sun)" stroke-width="5" stroke-linecap="round">';for(var i=0;i<8;i++){var a=i*Math.PI/4;s+='<line x1="'+(cx+Math.cos(a)*(r+8))+'" y1="'+(cy+Math.sin(a)*(r+8))+'" x2="'+(cx+Math.cos(a)*(r+18))+'" y2="'+(cy+Math.sin(a)*(r+18))+'"/>';}return s+'</g><circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="var(--sun)"/>';};
+ var body=k==='sun'?sun(75,58,28):k==='part'?sun(58,46,20)+cloud:cloud;
+ var lab=k==='sun'?'맑음':k==='part'?'구름 조금':'흐림';
+ return '<svg viewBox="0 0 150 118" role="img" aria-label="'+lab+'">'+body+'</svg>';
+}
+function paceSVG(cur){
+ var labs=['느긋한 걸음','보통 걸음','씩씩한 걸음'],out='';
+ for(var i=0;i<3;i++){
+  var x=55+i*110,lean=i*4,spread=10+i*7,col=i===cur?'var(--ink)':'var(--line)',w=i===cur?5:4;
+  out+='<g stroke="'+col+'" stroke-width="'+w+'" stroke-linecap="round" fill="none">'+
+   '<circle cx="'+(x+lean)+'" cy="28" r="10" fill="'+col+'" stroke="none"/>'+
+   '<line x1="'+(x+lean)+'" y1="42" x2="'+x+'" y2="82"/>'+
+   '<line x1="'+x+'" y1="82" x2="'+(x-spread)+'" y2="114"/><line x1="'+x+'" y1="82" x2="'+(x+spread)+'" y2="114"/>'+
+   '<line x1="'+(x+lean)+'" y1="52" x2="'+(x+lean-spread)+'" y2="72"/><line x1="'+(x+lean)+'" y1="52" x2="'+(x+lean+spread)+'" y2="72"/></g>'+
+   '<text x="'+x+'" y="140" text-anchor="middle" font-size="14" font-family="inherit" fill="'+(i===cur?'var(--ink)':'var(--muted)')+'" font-weight="'+(i===cur?700:500)+'">'+labs[i]+'</text>';
+ }
+ return '<svg viewBox="0 0 330 150" role="img" aria-label="'+labs[cur]+'">'+out+'</svg>';
+}
+function scaleSVG(balL){
+ var ang=Math.max(-14,Math.min(14,(50-balL)*1.6));
+ return '<svg viewBox="0 0 300 150" role="img" aria-label="좌우 균형 저울">'+
+  '<polygon points="150,40 135,140 165,140" fill="var(--line)"/><rect x="110" y="136" width="80" height="8" rx="4" fill="var(--line)"/>'+
+  '<g transform="rotate('+ang.toFixed(1)+' 150 40)" style="transition:transform .6s">'+
+   '<rect x="40" y="36" width="220" height="8" rx="4" fill="var(--ink)"/>'+
+   '<line x1="52" y1="44" x2="52" y2="78" stroke="var(--muted)" stroke-width="2"/><line x1="248" y1="44" x2="248" y2="78" stroke="var(--muted)" stroke-width="2"/>'+
+   '<path d="M22 78h60a30 14 0 0 1 -60 0z" fill="var(--green)"/><path d="M218 78h60a30 14 0 0 1 -60 0z" fill="var(--sky)"/>'+
+   '<text x="52" y="116" text-anchor="middle" font-size="15" font-weight="600" fill="var(--ink)" font-family="inherit">왼발</text>'+
+   '<text x="248" y="116" text-anchor="middle" font-size="15" font-weight="600" fill="var(--ink)" font-family="inherit">오른발</text></g>'+
+  '<circle cx="150" cy="40" r="6" fill="var(--ink)"/></svg>';
+}
+function plantSVG(st){
+ var s='<svg viewBox="0 0 150 150" role="img" aria-label="화분">';
+ s+='<path d="M45 108h60l-8 34H53z" fill="var(--amber)"/><rect x="40" y="100" width="70" height="12" rx="4" fill="var(--amber)"/>';
+ s+='<line x1="75" y1="100" x2="75" y2="'+(st>=2?44:72)+'" stroke="var(--green)" stroke-width="5" stroke-linecap="round"/>';
+ s+='<path d="M75 86c-14-2-24-12-26-22 14 0 24 8 26 22z" fill="var(--green)"/>';
+ if(st>=2)s+='<path d="M75 70c14-2 24-12 26-22-14 0-24 8-26 22z" fill="var(--green)"/>';
+ if(st>=3){s+='<g fill="var(--sun)">';for(var i=0;i<6;i++){var a=i*Math.PI/3;s+='<circle cx="'+(75+Math.cos(a)*11)+'" cy="'+(36+Math.sin(a)*11)+'" r="8"/>';}s+='</g><circle cx="75" cy="36" r="7" fill="var(--amber)"/>';}
+ else if(st===2)s+='<circle cx="75" cy="42" r="6" fill="var(--green)"/>';
+ return s+'</svg>';
+}
+function journeySVG(p){
+ var x0=24,x1=316,mx=x0+(x1-x0)*p;
+ return '<svg viewBox="0 0 340 66" role="img" aria-label="목표 활동 진행 '+Math.round(p*100)+'%">'+
+  '<line x1="'+x0+'" y1="24" x2="'+x1+'" y2="24" stroke="var(--line)" stroke-width="8" stroke-linecap="round"/>'+
+  '<line x1="'+x0+'" y1="24" x2="'+mx+'" y2="24" stroke="var(--green)" stroke-width="8" stroke-linecap="round"/>'+
+  [[x0,'집'],[170,'골목 쉼터'],[x1,'시장']].map(function(a){return '<circle cx="'+a[0]+'" cy="24" r="9" fill="var(--surface)" stroke="var(--ink)" stroke-width="3"/><text class="lab" x="'+a[0]+'" y="58" text-anchor="middle">'+a[1]+'</text>';}).join('')+
+  '<circle cx="'+mx+'" cy="24" r="12" fill="var(--green)" stroke="var(--surface)" stroke-width="3"/></svg>';
+}
+function lineChart(vals,o){
+ o=o||{};var W=320,H=150,pl=30,pr=10,pt=12,pb=24,min=o.min,max=o.max,n=vals.length;
+ var X=function(i){return pl+(W-pl-pr)*i/(n-1);},Y=function(v){return pt+(H-pt-pb)*(1-(v-min)/(max-min));};
+ var s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(o.label||'추이 그래프')+'">';
+ (o.ticks||[]).forEach(function(t){s+='<line class="grid" x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(t)+'" y2="'+Y(t)+'"/><text x="'+(pl-4)+'" y="'+(Y(t)+3)+'" text-anchor="end">'+t+'</text>';});
+ (o.refs||[]).forEach(function(r){s+='<line class="'+(r.cls||'ref')+'" x1="'+pl+'" x2="'+(W-pr)+'" y1="'+Y(r.v)+'" y2="'+Y(r.v)+'"/><text x="'+(pl+4)+'" y="'+(Y(r.v)-4)+'" style="fill:var(--coral)">'+r.l+'</text>';});
+ s+='<polyline class="ln" points="'+vals.map(function(v,i){return X(i).toFixed(1)+','+Y(v).toFixed(1);}).join(' ')+'"/>';
+ s+='<circle class="pt" cx="'+X(n-1)+'" cy="'+Y(vals[n-1])+'" r="4.5"/>';
+ s+='<text x="'+pl+'" y="'+(H-6)+'">'+(o.from||'12주 전')+'</text><text x="'+(W-pr)+'" y="'+(H-6)+'" text-anchor="end">이번 주</text>';
+ return s+'</svg>';
+}
+function slotBars(sl){
+ var W=320,H=120,bw=36,gap=(W-20-bw*6)/5,mx=Math.max(4,Math.max.apply(null,sl)),s='<svg viewBox="0 0 '+W+' '+H+'" role="img" aria-label="시간대별 휘청임 횟수">';
+ sl.forEach(function(v,i){var h=v/mx*72,x=10+i*(bw+gap),y=86-h;s+='<rect class="bar'+(v>=4?' hi':'')+'" x="'+x+'" y="'+y+'" width="'+bw+'" height="'+Math.max(2,h)+'" rx="6"/><text x="'+(x+bw/2)+'" y="'+(y-5)+'" text-anchor="middle">'+v+'</text><text x="'+(x+bw/2)+'" y="106" text-anchor="middle">'+SLOT_LABELS[i]+'</text>';});
+ return s+'</svg>';
+}
+var MAP_BASE='<line class="road" x1="0" y1="190" x2="320" y2="190"/><line class="road" x1="0" y1="62" x2="320" y2="62"/><line class="road" x1="72" y1="0" x2="72" y2="240"/><line class="road" x1="240" y1="0" x2="240" y2="240"/>'+
+ '<polyline class="usual" points="100,160 140,130 182,98"/>'+
+ '<rect class="place" x="84" y="148" width="32" height="24" rx="5"/><text x="90" y="143">집</text>'+
+ '<rect class="place" x="166" y="82" width="40" height="26" rx="5"/><text x="166" y="78">경로당</text>'+
+ '<rect class="place" x="254" y="150" width="50" height="30" rx="6"/><text x="262" y="145">시장</text>'+
+ '<rect class="place" x="252" y="18" width="48" height="24" rx="5"/><text x="250" y="12">버스정류장</text>';
+function mapSVG(){
+ var r=S.route,pos=r?r.pos:{x:182,y:98},trail=r?r.trail.join(' '):'';
+ return '<svg viewBox="0 0 320 240" role="img" aria-label="어르신 위치 지도">'+MAP_BASE+'<polyline class="trail" points="'+trail+'"/><circle class="me'+(S.wander&&S.wander.alerted?' bad':'')+'" cx="'+pos.x+'" cy="'+pos.y+'" r="8"/></svg>';
+}
+var ICONS={
+ home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 11l8-7 8 7v9H4z"/></svg>',
+ trend:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18l5-6 4 3 7-9"/></svg>',
+ life:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg>',
+ loc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s-7-6-7-11a7 7 0 0 1 14 0c0 5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+ dev:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="3" width="10" height="18" rx="3"/><path d="M10 7h4"/></svg>',
+ speaker:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 10v4h4l5 4V6L8 10z"/><path d="M16 9a4 4 0 0 1 0 6" stroke-linecap="round"/></svg>',
+ face:'<svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="22" fill="var(--green-soft)"/><circle cx="22" cy="18" r="7" fill="var(--green)"/><path d="M9 38c3-8 23-8 26 0" fill="var(--green)"/></svg>'
+};
+
+/* ---------- elder ---------- */
+function speak(t){toast('음성 안내: '+t);}
+function elderHome(){
+ var d=M(),extra='';
+ if(S.scene==='wander'&&S.wander&&S.wander.alerted){
+  extra='<div class="el-card" style="border:3px solid var(--amber)"><h3>지금 계신 곳</h3><div class="big">버스정류장 근처에 계세요</div><button class="el-btn" data-a="homeway">집으로 가는 길 보기</button><button class="el-btn light" data-a="callkid">딸에게 전화하기</button></div>';
+ }
+ if(S.scene==='device')extra='<div class="el-card" style="border:3px solid var(--amber)"><h3>신발 알림</h3><div class="big">신발 충전이 필요해요</div><p style="font-size:17px;color:var(--muted);margin-top:4px">오늘 밤 신발 옆 단추를 충전기에 꽂아 주세요</p></div>';
+ var prac=S.practice?S.practice:(S.scene==='change'?'왼발도 꾹 딛고 천천히 걷기':'뒤꿈치부터 딛기');
+ var pracBy=S.practice?'<p style="font-size:16px;color:var(--green);font-weight:600;margin-top:2px">담당 선생님이 보낸 연습이에요</p>':'';
+ return '<div class="el">'+
+  '<div class="el-head"><h2>김순자 님,<br>안녕하세요</h2><button class="voice" data-a="voice">'+ICONS.speaker+'듣기</button></div>'+
+  extra+
+  '<div class="weather">'+weatherSVG(d.weather)+'<div class="say">'+d.say+'</div><div class="sub">'+d.sub+'</div></div>'+
+  '<div class="el-card"><h3>나의 목표</h3><div class="big">시장 혼자 다녀오기</div><div class="journey">'+journeySVG(d.goal)+'</div><p style="font-size:17px">'+d.goalNote+'</p></div>'+
+  '<div class="el-card"><h3>오늘의 연습</h3><div class="big">'+prac+'</div>'+pracBy+'<button class="el-btn" data-a="walk">걷기 시작</button></div>'+
+  (S.conf?'':'<button class="el-btn light" data-a="question">이번 주 질문에 답하기</button>')+
+ '</div>';
+}
+function elderWalk(){
+ var d=M(),good=S.walkCue===2,cue=S.walkCue===0?'<div class="cue">발걸음을 살펴보고 있어요<small>평소처럼 걸으시면 돼요</small></div>':good?'<div class="cue good">좋아요, 양발이 고르게 닿아요<small>지금처럼 걸어 보세요</small></div>':'<div class="cue">왼발을 조금 더 꾹 딛어 보세요<small>왼발 신발이 짧게 떨려요</small></div>';
+ var bl=S.scene==='walk'?(good?49:40):d.balL;
+ var pace=S.scene==='walk'?(good?2:1):d.pace;
+ return '<div class="el">'+
+  '<div class="el-head"><h2>걷고 있어요</h2><button class="voice" data-a="voice">'+ICONS.speaker+'듣기</button></div>'+cue+
+  '<div class="el-card"><h3>지금 걸음</h3><div class="figure">'+paceSVG(pace)+'</div></div>'+
+  '<div class="el-card"><h3>양발 균형</h3>'+scaleSVG(bl)+
+  '<div class="feetbuzz"><div class="'+(S.walkCue===1?'on':'')+'"><svg viewBox="0 0 46 84"><path class="sole" d="M24 3c12 0 17 13 16 27-1 12-6 18-7 30-1 12 1 18-5 22-4 2-10 2-13-1-5-6-3-14-3-24S2 42 3 28C4 12 12 3 24 3z"/></svg>왼발</div><div><svg viewBox="0 0 46 84" style="transform:scaleX(-1)"><path class="sole" d="M24 3c12 0 17 13 16 27-1 12-6 18-7 30-1 12 1 18-5 22-4 2-10 2-13-1-5-6-3-14-3-24S2 42 3 28C4 12 12 3 24 3z"/></svg>오른발</div></div></div>'+
+  '<p class="el-note">오늘 '+(d.steps+S.walkSteps).toLocaleString('ko-KR')+'걸음 걸으셨어요</p>'+
+  '<button class="el-btn" data-a="endwalk">걷기 마치기</button></div>';
+}
+function elderResult(){
+ var d=M(),warn=S.scene==='change';
+ return '<div class="el">'+
+  '<div class="el-head"><h2>잘하셨어요</h2><button class="voice" data-a="voice">'+ICONS.speaker+'듣기</button></div>'+
+  '<div class="el-card plant" style="text-align:center">'+plantSVG(d.plant)+'<div class="big">'+(d.plant>=3?'4주 동안 꾸준히 걸어<br>꽃이 피었어요':'새 잎이 났어요<br>조금씩 자라고 있어요')+'</div></div>'+
+  '<div class="el-card"><h3>잘한 점</h3><div class="big">'+(S.scene==='walk'||!warn?'양발이 고르게 닿았어요':'오늘도 밖에 나가셨어요')+'</div></div>'+
+  '<div class="el-card"><h3>다음에 연습할 점</h3><div class="big">'+(warn?'왼발도 꾹 딛기':'발을 조금 더 들어 올리기')+'</div></div>'+
+  '<button class="el-btn" data-a="home">처음 화면으로</button></div>';
+}
+function elderQuestion(){
+ return '<div class="el"><div class="el-head"><h2>이번 주 질문</h2><button class="voice" data-a="voice">'+ICONS.speaker+'듣기</button></div>'+
+  '<div class="el-card"><div class="big" style="font-size:24px">요즘 밖에 나갈 때<br>넘어질까 걱정되세요?</div></div>'+
+  '<div class="el-q"><button class="el-btn light" data-a="conf" data-v="2">네, 걱정돼요</button><button class="el-btn light" data-a="conf" data-v="1">조금 걱정돼요</button><button class="el-btn light" data-a="conf" data-v="0">아니요, 괜찮아요</button></div>'+
+  '<p class="el-note">답하신 내용은 담당 선생님께 전해져요</p></div>';
+}
+function elderEmergency(){
+ var f=S.fall,left=f&&f.stage===1?f.left:0;
+ var msg=f.stage===1?left+'초 안에 답이 없으면<br>가족에게 알려요':f.stage===2?'가족에게 알렸어요<br>'+left+'초 뒤 담당 기관과 119에 알려요':'담당 기관과 119에 알렸어요<br>곧 도움이 올 거예요';
+ return '<div class="emer" role="alertdialog" aria-label="낙상 확인"><h2>괜찮으세요?</h2><p>넘어지신 것 같아요.</p><div class="count">'+msg+'</div>'+
+  '<button class="el-btn" data-a="fine">괜찮아요</button><button class="el-btn light" data-a="help">도와주세요</button>'+
+  '<p style="font-size:17px;margin-top:14px;opacity:.95">말씀하기 어려우면 발뒤꿈치를 두 번 구르셔도 괜찮다고 전해져요</p>'+
+  '<button class="demo" data-a="fine">발뒤꿈치 두 번 구르기 (시연)</button></div>';
+}
+function renderElder(){
+ var body=S.fall&&S.fall.stage>0&&!S.fall.resolved?elderEmergency():S.el==='walk'?elderWalk():S.el==='result'?elderResult():S.el==='question'?elderQuestion():elderHome();
+ return '<div class="phone"><div class="scr" id="scr">'+body+'</div></div>';
+}
+
+/* ---------- guardian ---------- */
+function pct(a,b){return Math.round((a-b)/b*100);}
+function gHome(){
+ var d=M(),stTxt={ok:['평소와 같아요','ok'],warn:['걸음 변화 주의','warn']}[d.status]||['평소와 같아요','ok'];
+ if(S.scene==='wander'&&S.wander&&S.wander.alerted)stTxt=['배회 의심','bad'];
+ if(S.scene==='device')stTxt=['기기 확인 필요','mute'];
+ var todos=S.scene==='change'?[
+   ['t1','왼쪽 무릎이나 발이 아프신지 여쭤보세요','왼발에 실리는 힘이 3주째 줄었어요','전화하기'],
+   ['t2','침실에서 화장실 가는 길에 야간등을 놓아 주세요','새벽 시간에 휘청임이 많아요','체크리스트'],
+   ['t3','담당 선생님께 상담을 요청해 보세요','걸음이 4주 평균보다 13% 느려졌어요','상담 요청']]
+  :S.scene==='device'?[['t4','어머니께 신발 충전을 부탁드려 보세요','제어 모듈 배터리가 12% 남았어요','전화하기']]
+  :[['t5','주말에 함께 산책해 보세요','이번 주 경로당에 5번 다녀오셨어요','산책 계획'],['t6','“걸음이 좋아지셨네요” 응원을 보내 보세요','시장 가는 길 목표의 70%를 이루셨어요','응원 보내기']];
+ var alerts=[];
+ if(S.scene==='change')alerts.push(['월','주간 알림: 걸음이 느려지고 왼발에 힘이 덜 실려요']);
+ if(S.scene==='device')alerts.push([hhmm(),'제어 모듈 배터리 12%']);
+ if(S.wander&&S.wander.alerted)alerts.push([S.wander.t,'평소 길을 벗어나 같은 곳을 맴돌고 계세요']);
+ if(S.fall&&S.fall.resolved==='ok')alerts.push([S.fall.t,'넘어짐이 감지됐지만 괜찮다고 응답하셨어요']);
+ alerts.push(['10:14','경로당 도착, 평소 경로'],['07:40','아침 첫 걸음']);
+ return '<div class="who">'+ICONS.face+'<div style="flex:1"><div class="n">김순자 님 (어머니)</div><div class="s">81세, 경도인지장애, 혼자 거주</div></div><span class="pill '+stTxt[1]+'">'+stTxt[0]+'</span></div>'+
+  '<div class="blk"><h3>오늘 요약 <small>어머니 화면에는 “'+d.say.replace('오늘 걸음은 ','')+'”으로 보여요</small></h3><div class="mets">'+
+   '<div class="met"><div class="k">걷는 속도</div><div class="v">'+d.speed.toFixed(2)+'<small>m/초</small></div><div class="d '+(pct(d.speed,d.avg)<=-10?'down':'flat')+'">4주 평균 대비 '+(pct(d.speed,d.avg)>0?'+':'')+pct(d.speed,d.avg)+'%</div></div>'+
+   '<div class="met"><div class="k">좌우 균형</div><div class="v">'+d.balL+' : '+(100-d.balL)+'</div><div class="d '+(d.balL<43?'down':'flat')+'">'+(d.balL<43?'오른쪽으로 치우침':'고른 편')+'</div></div>'+
+   '<div class="met"><div class="k">오늘 걸음</div><div class="v">'+d.steps.toLocaleString('ko-KR')+'<small>걸음</small></div></div>'+
+   '<div class="met"><div class="k">휘청임</div><div class="v">'+d.sway+'<small>회</small></div><div class="d '+(d.sway>=4?'down':'flat')+'">'+(d.sway>=4?'평소의 3배':'평소 수준')+'</div></div></div></div>'+
+  '<div class="blk"><h3>이번 주 할 일</h3>'+todos.map(function(t){var done=S.todoDone[t[0]];return '<div class="todo"><div><b>'+t[1]+'</b><span>'+t[2]+'</span></div><button class="sbtn '+(done?'done':'pri')+'" data-a="todo" data-id="'+t[0]+'" data-l="'+t[3]+'">'+(done?'완료':t[3])+'</button></div>';}).join('')+'</div>'+
+  '<div class="blk"><h3>알림</h3><ul class="alerts">'+alerts.map(function(a){return '<li><time>'+a[0]+'</time><span>'+a[1]+'</span></li>';}).join('')+'</ul></div>';
+}
+function gTrend(){
+ var d=M(),warn=S.scene==='change';
+ return '<div class="blk"><h3>걸음 변화 추이 <small>최근 12주, 주간 평균</small></h3>'+
+  '<div class="chart'+(warn?' warn':'')+'">'+lineChart(d.trend,{min:0.7,max:1.05,ticks:[0.8,0.9,1.0],refs:[{v:0.8,l:'주의 참고선'}],label:'걷는 속도 추이'})+'</div>'+
+  '<div class="plain"><b>'+(warn?'최근 3주 동안 걸음이 느려지고 있어요':'12주 동안 걸음이 꾸준히 빨라졌어요')+'</b>'+(warn?'4주 평균보다 13% 느려졌어요. 아직 참고선 위에 있지만, 무릎이나 발에 불편이 없는지 살펴봐 주세요.':'걷는 속도가 0.86에서 0.96m/초로 좋아졌어요. 지금처럼 유지하는 것이 목표예요.')+'</div></div>'+
+  '<div class="blk"><h3>항목별 변화 <small>4주 평균과 비교</small></h3><div class="mets">'+
+   '<div class="met"><div class="k">걷는 속도</div><div class="v">'+d.speed.toFixed(2)+'<small>m/초</small></div><div class="d '+(warn?'down':'up')+'">'+(warn?'13% 느려짐':'1% 빨라짐')+'</div></div>'+
+   '<div class="met"><div class="k">보폭</div><div class="v">'+d.stride+'<small>cm</small></div><div class="d '+(warn?'down':'flat')+'">'+(warn?'6cm 짧아짐':'변화 없음')+'</div></div>'+
+   '<div class="met"><div class="k">걸음 주기</div><div class="v">'+d.cad+'<small>걸음/분</small></div><div class="d '+(warn?'down':'flat')+'">'+(warn?'느려짐':'변화 없음')+'</div></div>'+
+   '<div class="met"><div class="k">휘청임</div><div class="v">'+d.sway+'<small>회/일</small></div><div class="d '+(warn?'down':'flat')+'">'+(warn?'평소의 3배':'평소 수준')+'</div></div></div>'+
+  '<div style="margin-top:12px;font-size:13.5px;font-weight:600">좌우 균형</div><div class="bal"><i class="l" style="width:'+d.balL+'%"></i><i class="r" style="width:'+(100-d.balL)+'%"></i></div><div class="bal-lab"><span>왼발 '+d.balL+'%</span><span>오른발 '+(100-d.balL)+'%</span></div></div>'+
+  '<div class="blk"><h3>목표 활동 <small>어머니가 고른 목표</small></h3><div class="todo"><div><b>시장 혼자 다녀오기</b><span>'+d.goalNote+'</span></div><span class="pill '+(warn?'warn':'ok')+'">'+Math.round(d.goal*100)+'%</span></div><div class="todo"><div><b>경로당 매일 가기</b><span>이번 주 '+d.hall+'일 다녀오셨어요</span></div><span class="pill '+(d.hall>=5?'ok':'warn')+'">'+d.hall+'/7일</span></div></div>';
+}
+function gLife(){
+ var d=M(),peak=d.slots.indexOf(Math.max.apply(null,d.slots));
+ var items=[['c1','침실에서 화장실까지 야간등'],['c2','현관과 욕실 문턱 높이'],['c3','미끄러운 깔개 치우기'],['c4','욕실과 계단 손잡이'],['c5','자주 다니는 길의 물건 정리']];
+ return '<div class="blk"><h3>시간대별 휘청임 <small>최근 1주</small></h3><div class="chart">'+slotBars(d.slots)+'</div>'+
+  '<div class="plain"><b>'+(d.slots[peak]>=4?SLOT_LABELS[peak]+' 시간에 휘청임이 많아요':'특별히 불안정한 시간대는 없어요')+'</b>'+(d.slots[peak]>=4?'새벽에 화장실을 오가실 때로 보여요. 어두운 길과 문턱을 점검해 주세요.':'지금처럼 생활하시면 돼요.')+'</div></div>'+
+  '<div class="blk"><h3>집 안 환경 점검 <small>'+Object.keys(S.checks).filter(function(k){return S.checks[k];}).length+'/'+items.length+' 완료</small></h3>'+
+  items.map(function(it){return '<label class="check"><input type="checkbox" data-a="check" data-id="'+it[0]+'" '+(S.checks[it[0]]?'checked':'')+'>'+it[1]+'</label>';}).join('')+'</div>'+
+  '<div class="blk"><h3>담당 선생님께 공유 <small>치료에 필요한 메모만</small></h3><p style="font-size:13.5px;color:var(--muted);margin-bottom:8px">메모는 “공유”를 눌러야 담당 기관에 전해져요.</p><div class="todo"><div><b>“왼쪽 무릎이 아프다고 하셨어요”</b><span>지난 통화에서 남긴 메모</span></div><button class="sbtn '+(S.memoShared?'done':'pri')+'" data-a="memo">'+(S.memoShared?'공유됨':'공유')+'</button></div></div>';
+}
+function gLoc(){
+ var out=S.scene==='wander'||S.route;
+ var st=S.wander&&S.wander.alerted?'버스정류장 근처에서 같은 곳을 맴돌고 계세요':S.scene==='wander'?'경로당에서 나와 이동 중이에요':'경로당에 계세요';
+ return '<div class="blk map"><h3>지금 위치 <small>외출 중이거나 응급 상황일 때만 보여요</small></h3>'+mapSVG()+
+  '<div class="bal-lab" style="margin-top:6px"><span>점선: 평소 다니는 길</span><span>파란 선: 오늘 이동</span></div></div>'+
+  '<div class="blk"><div class="infocard"><div class="row"><span>상태</span><span>'+st+'</span></div><div class="row"><span>집에서 거리</span><span id="g-dist">'+(S.route?S.route.dist:'약 160m')+'</span></div><div class="row"><span>알림 기준</span><span>같은 곳 반복, 평소 길에서 300m 이탈</span></div></div></div>'+
+  (S.wander&&S.wander.alerted?'<button class="gbtn dark" data-a="callmom">어머니께 전화하기</button><button class="gbtn line" data-a="guide">어머니 화면에 집 가는 길 띄우기</button>':'');
+}
+function gDev(){
+ var low=S.scene==='device',b=low?12:76;
+ return '<div class="blk"><h3>연결된 모듈</h3>'+
+  '<div class="dev"><div><b>제어 모듈 (신발 바깥)</b><span>'+(low?'오늘 밤 충전이 필요해요':'마지막 충전 2일 전')+'</span></div><div class="batt'+(low?' low':'')+'"><span class="c"><i style="width:'+b+'%"></i></span>'+b+'%</div></div>'+
+  '<div class="dev"><div><b>왼쪽 깔창 모듈</b><span>압력 센서, 동작 센서, 진동</span></div><span class="pill ok">정상</span></div>'+
+  '<div class="dev"><div><b>오른쪽 깔창 모듈</b><span>압력 센서, 동작 센서, 진동</span></div><span class="pill ok">정상</span></div></div>'+
+  '<div class="blk"><h3>착용</h3><div class="dev"><div><b>외출용 운동화</b><span>오늘 '+(low?'2시간':'4시간 20분')+' 착용</span></div><span class="pill ok">착용 중</span></div><div class="dev"><div><b>실내화</b><span>모듈을 옮겨 끼우면 집 안에서도 측정돼요</span></div><span class="pill mute">미사용</span></div></div>'+
+  (low?'<button class="gbtn dark" data-a="remind">어머니 화면에 충전 안내 보내기</button>':'');
+}
+function gEmer(){
+ var f=S.fall;
+ if(f&&f.stage>=2){
+  var ok=f.resolved==='ok';
+  return '<div class="gem"><div class="head'+(ok?' ok':'')+'"><b>'+(ok?'어머니가 괜찮다고 응답하셨어요':'어머니가 넘어지신 것 같아요')+'</b>'+f.t+', 집 앞 골목</div>'+
+   '<div class="blk"><h3>대응 단계</h3><ul class="steps">'+
+    '<li class="done"><div>충격 감지, 어머니께 확인<span>'+f.t+'</span></div></li>'+
+    '<li class="'+(f.stage>=2?'done':'')+'"><div>보호자에게 알림<span>10초 무응답</span></div></li>'+
+    '<li class="'+(ok?'':(f.stage>=3?'on':''))+'"><div>담당 기관('+(S.orgType==='yoyang'?'늘봄 요양원':'한빛구 보건소')+')과 119에 응급 메시지<span>'+(ok?'어머니 응답으로 중단됨':f.stage>=3?'전송됨':(f.left+'초 뒤 자동 전송'))+'</span></div></li></ul></div>'+
+   '<div class="blk infocard"><h3>응급 정보 카드 <small>신고할 때 읽어 주세요</small></h3>'+
+    '<div class="row"><span>이름, 나이</span><span>김순자, 81세</span></div><div class="row"><span>위치</span><span>한빛동 집 앞 골목</span></div><div class="row"><span>넘어진 시각</span><span>'+f.t+'</span></div><div class="row"><span>충격 세기</span><span>강함</span></div><div class="row"><span>지병</span><span>경도인지장애, 고혈압</span></div><div class="row"><span>복용 약</span><span>혈압약 1종</span></div></div>'+
+   (ok?'':'<button class="gbtn red" data-a="c119">119에 신고하기</button>')+'<button class="gbtn dark" data-a="callmom">어머니께 전화하기</button><button class="gbtn line" data-a="closegem">닫기</button></div>';
+ }
+ if(S.wander&&S.wander.alerted&&!S.wander.seen){
+  return '<div class="gem"><div class="head wander"><b>어머니가 평소 길을 벗어나 같은 곳을 맴돌고 계세요</b>'+S.wander.t+', 버스정류장 근처</div><div class="blk map">'+mapSVG()+'</div>'+
+   '<button class="gbtn dark" data-a="callmom">어머니께 전화하기</button><button class="gbtn line" data-a="guide">어머니 화면에 집 가는 길 띄우기</button><button class="gbtn line" data-a="seenwander">위치 화면으로 보기</button></div>';
+ }
+ return '';
+}
+function renderGuard(){
+ var tabs=[['home','홈'],['trend','걸음 변화'],['life','생활 패턴'],['loc','위치'],['dev','기기']];
+ var body={home:gHome,trend:gTrend,life:gLife,loc:gLoc,dev:gDev}[S.gt]();
+ var tabDot={loc:S.wander&&S.wander.alerted,dev:S.scene==='device',trend:S.scene==='change'};
+ return '<div class="phone"><div class="scr" id="scr"><div class="gd"><div class="gd-top"><b>스텝가드 보호자</b><span>'+now()+'</span></div>'+body+'</div></div>'+gEmer()+
+  '<nav class="tabbar" role="tablist">'+tabs.map(function(t){return '<button role="tab" data-a="gt" data-id="'+t[0]+'" aria-selected="'+(S.gt===t[0])+'">'+ICONS[t[0]]+t[1]+'<i class="dot'+(tabDot[t[0]]?' on':'')+'"></i></button>';}).join('')+'</nav></div>';
+}
+
+/* ---------- org ---------- */
+function meRow(){
+ var d=M(),st=d.status==='warn'?'warn':'ok',why='';
+ if(S.scene==='change')why='보행 속도 13% 감소, 좌우 균형 39 : 61';
+ if(S.scene==='wander'&&S.wander&&S.wander.alerted){st='bad';why='배회 의심, 현재 외출 중';}
+ if(S.fall&&S.fall.stage>=3&&!S.fall.resolved){st='bad';why='낙상 의심, 응답 없음';}
+ if(S.scene==='device'){st='mute';why='제어 모듈 배터리 12%';}
+ return {id:'me',name:'김순자',age:81,st:st,why:why,sp:d.speed,ch:pct(d.speed,d.avg),bl:d.balL,sw:d.sway};
+}
+function people(){var a=[meRow()].concat(PEOPLE);a.forEach(function(p,i){p.place=S.orgType==='yoyang'?(201+i)+'호':(i===0?'한빛동':DONG[i-1]);});return a.sort(function(x,y){return ORDER[x.st]-ORDER[y.st];});}
+function orgOverview(){
+ var list=people(),cnt={bad:0,warn:0,info:0,mute:0};list.forEach(function(p){if(cnt[p.st]!==undefined)cnt[p.st]++;});
+ var y=S.orgType==='yoyang';
+ return '<h2>'+(y?'입소자':'담당 어르신')+' 전체 현황</h2><p class="lead">'+list.length+'명 중 오늘 먼저 살필 분을 위로 정렬했어요. 줄을 누르면 상세 화면으로 이동합니다.</p>'+
+  '<div class="kpis"><div class="kpi bad"><b>'+cnt.bad+'</b><span>우선 관리</span></div><div class="kpi warn"><b>'+cnt.warn+'</b><span>주의</span></div><div class="kpi info"><b>'+cnt.info+'</b><span>안부 확인</span></div><div class="kpi mute"><b>'+cnt.mute+'</b><span>기기 확인</span></div></div>'+
+  '<div class="tblw"><table class="t"><thead><tr><th>상태</th><th>이름</th><th>나이</th><th>'+(y?'호실':'동네')+'</th><th>보행 속도</th><th>4주 대비</th><th>좌우 균형</th><th>사유</th></tr></thead><tbody>'+
+  list.map(function(p){return '<tr data-a="person" data-id="'+p.id+'"><td><span class="pill '+ST[p.st][1]+'">'+ST[p.st][0]+'</span></td><td><b>'+p.name+'</b></td><td class="num">'+p.age+'</td><td>'+p.place+'</td><td class="num">'+p.sp.toFixed(2)+'m/s</td><td class="num" style="color:'+(p.ch<=-10?'var(--amber)':'inherit')+'">'+(p.ch>0?'+':'')+p.ch+'%</td><td class="num">'+p.bl+' : '+(100-p.bl)+'</td><td>'+(p.why||'<span style="color:var(--muted)">–</span>')+'</td></tr>';}).join('')+'</tbody></table></div>';
+}
+function personData(id){
+ if(id==='me'){var d=M();return {name:'김순자',age:81,trend:d.trend,balT:d.balT,slots:d.slots,goal:d.goal,hall:d.hall,fear:d.fear,speed:d.speed,ch:pct(d.speed,d.avg),bl:d.balL,stride:d.stride,cad:d.cad,sway:d.sway,warn:d.status==='warn'};}
+ var p=PEOPLE.filter(function(x){return x.id===id;})[0],start=p.sp/(1+p.ch/100*3),tr=[];for(var i=0;i<12;i++)tr.push(+(start+(p.sp-start)*i/11).toFixed(2));
+ var bt=[];for(var j=0;j<12;j++)bt.push(Math.round(48+(p.bl-48)*j/11));
+ return {name:p.name,age:p.age,trend:tr,balT:bt,slots:[p.sw>3?3:1,1,0,1,0,p.sw>4?3:0],goal:0.5,hall:3,fear:[1,1,1,1,1,1],speed:p.sp,ch:p.ch,bl:p.bl,stride:Math.round(p.sp*54),cad:Math.round(80+p.sp*22),sway:p.sw,warn:p.st!=='ok'};
+}
+function orgDetail(){
+ var p=personData(S.person),peak=p.slots.indexOf(Math.max.apply(null,p.slots)),fearTxt=['걱정 없음','조금 걱정','걱정됨'];
+ var opts=people().map(function(x){return '<button class="chip" data-a="person" data-id="'+x.id+'" aria-pressed="'+(S.person===x.id)+'">'+x.name+'</button>';}).join('');
+ return '<div class="dhead"><div><h2>'+p.name+' 님 ('+p.age+'세)</h2><p class="lead" style="margin:0">일상 보행 기준, 지난 방문(10월 20일) 이후 변화</p></div><button class="sbtn pri" data-a="ot" data-id="soap">방문 기록 쓰기</button></div>'+
+  '<div class="chips" style="margin-top:-4px;margin-bottom:12px">'+opts+'</div>'+
+  '<div class="kpis"><div class="kpi '+(p.speed<0.8?'bad':p.ch<=-10?'warn':'info')+'"><b>'+p.speed.toFixed(2)+'</b><span>보행 속도 m/s ('+(p.ch>0?'+':'')+p.ch+'%)</span></div><div class="kpi '+(p.bl<42?'warn':'info')+'"><b>'+p.bl+':'+(100-p.bl)+'</b><span>좌우 균형</span></div><div class="kpi info"><b>'+p.stride+'</b><span>보폭 cm</span></div><div class="kpi '+(p.sway>=4?'warn':'info')+'"><b>'+p.sway+'</b><span>하루 휘청임</span></div></div>'+
+  '<div class="grid2">'+
+   '<div class="blk"><h3>보행 속도 추이 <small>참고선 0.8, 1.0m/s</small></h3><div class="chart'+(p.warn?' warn':'')+'">'+lineChart(p.trend,{min:0.65,max:1.1,ticks:[0.7,0.8,0.9,1.0],refs:[{v:0.8,l:'노쇠 참고 0.8'},{v:1.0,l:'1.0',cls:'ref2'}],label:'보행 속도 추이'})+'</div></div>'+
+   '<div class="blk"><h3>좌우 균형 추이 <small>왼발 부하 비율 %</small></h3><div class="chart'+(p.warn?' warn':'')+'">'+lineChart(p.balT,{min:30,max:55,ticks:[35,40,45,50],refs:[{v:42,l:'치우침 기준'}],label:'좌우 균형 추이'})+'</div></div>'+
+   '<div class="blk"><h3>시간대별 휘청임 <small>최근 1주</small></h3><div class="chart">'+slotBars(p.slots)+'</div><div class="plain"><b>환경 권고</b>'+(p.slots[peak]>=3?SLOT_LABELS[peak]+' 시간의 휘청임이 많아 이동 동선의 조명과 문턱 점검을 권합니다.':'시간대별로 뚜렷한 위험은 없습니다.')+'</div></div>'+
+   '<div class="blk"><h3>목표 활동과 자신감</h3><div class="todo"><div><b>시장 혼자 다녀오기</b><span>본인이 고른 목표 활동</span></div><span class="pill info">'+Math.round(p.goal*100)+'%</span></div><div class="todo"><div><b>경로당 방문</b><span>최근 1주</span></div><span class="pill info">'+p.hall+'/7일</span></div><div class="todo"><div><b>낙상 두려움</b><span>주 1회 질문, 최근 응답 '+fearTxt[S.person==='me'&&S.conf!==null?S.conf:p.fear[p.fear.length-1]]+'</span></div><span class="pill '+(p.fear[p.fear.length-1]>=2?'warn':'ok')+'">'+(p.fear[p.fear.length-1]>=2?'증가':'안정')+'</span></div></div>'+
+  '</div><p class="lead" style="margin-top:4px">위치와 이동 경로는 관리 목적에 필요한 응급 상황에서만 표시됩니다.</p>';
+}
+function orgSoap(){
+ var p=personData('me'),c=S.scene==='change',fearTxt=['걱정 없음','조금 걱정','걱정됨'];
+ var conf=S.conf!==null?fearTxt[S.conf]+' (이번 주 응답)':fearTxt[p.fear[p.fear.length-1]]+' (지난주 응답)';
+ var P=['뒤꿈치부터 딛기','발 들어 올리기','왼발도 꾹 딛기','의자에서 일어서기 10회'];
+ return '<div class="dhead"><div><h2>방문 기록 (SOAP)</h2><p class="lead" style="margin:0">김순자 님, 지난 방문 10월 20일 이후. S와 O는 자동으로 채워졌어요.</p></div><span class="pill info">자동 작성 2/4</span></div>'+
+ '<div class="soap">'+
+  '<div class="sec"><div class="letter">S</div><div><h4>주관적 정보 <span class="pill mute">자동</span></h4><ul><li>낙상 두려움: '+conf+'</li>'+(S.memoShared?'<li>보호자 공유 메모: “왼쪽 무릎이 아프다고 하셨어요”</li>':'<li style="color:var(--muted)">보호자가 공유한 메모 없음</li>')+'<li>본인 목표 활동: 시장 혼자 다녀오기</li></ul></div></div>'+
+  '<div class="sec"><div class="letter">O</div><div><h4>객관적 정보 <span class="pill mute">자동</span></h4><table class="otable"><tr><th>지표</th><th>지난 방문</th><th>오늘</th><th>변화</th></tr>'+
+   '<tr><td>보행 속도</td><td>0.95m/s</td><td>'+p.speed.toFixed(2)+'m/s</td><td>'+(p.ch>0?'+':'')+p.ch+'%</td></tr>'+
+   '<tr><td>보폭</td><td>51cm</td><td>'+p.stride+'cm</td><td>'+(p.stride-51>0?'+':'')+(p.stride-51)+'cm</td></tr>'+
+   '<tr><td>걸음 주기</td><td>103걸음/분</td><td>'+p.cad+'걸음/분</td><td>'+(p.cad-103>0?'+':'')+(p.cad-103)+'</td></tr>'+
+   '<tr><td>좌우 균형</td><td>48 : 52</td><td>'+p.bl+' : '+(100-p.bl)+'</td><td>'+(c?'치우침':'유지')+'</td></tr>'+
+   '<tr><td>하루 휘청임</td><td>2회</td><td>'+p.sway+'회</td><td>'+(c?'증가 (새벽)':'유지')+'</td></tr>'+
+   '<tr><td>넘어질 뻔한 순간</td><td colspan="3">'+(c?'2회 (새벽, 실내)':'0회')+'</td></tr>'+
+   '<tr><td>홈 연습 수행</td><td colspan="3">'+(c?'4/7일':'6/7일')+'</td></tr></table><p style="font-size:12px;color:var(--muted);margin-top:6px">일상 보행 기준 값입니다. 방문 시 검사 결과는 직접 비교해 주세요.</p></div></div>'+
+  '<div class="sec"><div class="letter">A</div><div><h4>평가 <span class="pill info">직접 작성</span></h4><textarea data-a="soapA" placeholder="예: 최근 3주간 보행 속도 저하와 좌측 체중 부하 감소. 무릎 통증과의 관련 확인 필요.">'+esc(S.soap.A)+'</textarea><p style="font-size:12px;color:var(--muted);margin-top:4px">평가는 담당자만 작성합니다. 서비스는 변화 요약만 제공합니다.</p></div></div>'+
+  '<div class="sec"><div class="letter">P</div><div><h4>계획 <span class="pill info">직접 작성</span></h4><div class="chips">'+P.map(function(x){return '<button class="chip" data-a="pchip" data-v="'+x+'" aria-pressed="'+(S.soap.P.indexOf(x)>=0)+'">'+x+'</button>';}).join('')+'</div>'+
+   '<button class="sbtn pri" data-a="sendp">어르신 화면으로 연습 보내기</button> <button class="sbtn" data-a="summary">보호자용 요약 만들기</button> <button class="sbtn" data-a="savesoap">기록 저장</button></div></div>'+
+ '</div>';
+}
+function orgEmer(){
+ var ev=[];
+ if(S.fall&&S.fall.stage>=3)ev.push(['bad','김순자 님 낙상 의심','한빛동 집 앞 골목, '+S.fall.t+'. 본인과 보호자 응답 없음. 119에 응급 메시지 전송됨.','출동 요청 확인']);
+ if(S.fall&&S.fall.resolved==='ok')ev.push(['ok','김순자 님 낙상 감지 해제','본인이 괜찮다고 응답함. 다음 방문 때 확인 권장.','']);
+ if(S.wander&&S.wander.alerted)ev.push(['warn','김순자 님 배회 의심','버스정류장 근처에서 반복 이동. 보호자에게 알림 전송됨.','위치 보기']);
+ ev.push(['ok','이말순 님 넘어질 뻔한 순간','오늘 오전 9:12, 실내. 본인 응답으로 해제.','']);
+ return '<h2>응급 관제</h2><p class="lead">실시간 응급·배회 알림과 대응 상황입니다. 응급 상황에서만 위치를 확인할 수 있어요.</p>'+
+  ev.map(function(e){return '<div class="ev '+e[0]+'"><span class="pill '+(e[0]==='ok'?'ok':e[0])+'">'+(e[0]==='bad'?'응급':e[0]==='warn'?'배회':'해제')+'</span><div><b>'+e[1]+'</b><span>'+e[2]+'</span></div>'+(e[3]?'<button class="sbtn pri" data-a="evbtn" data-l="'+e[3]+'">'+e[3]+'</button>':'<span></span>')+'</div>';}).join('')+
+  (S.wander&&S.wander.alerted||S.fall&&S.fall.stage>=3?'<div class="blk map" style="max-width:420px"><h3>응급 대상 위치</h3>'+mapSVG()+'</div>':'');
+}
+function renderOrg(){
+ var y=S.orgType==='yoyang',evc=(S.fall&&S.fall.stage>=3&&!S.fall.resolved?1:0)+(S.wander&&S.wander.alerted?1:0);
+ var tabs=[['overview','전체 현황'],['detail','개인 상세'],['soap','방문 기록'],['emer','응급 관제']];
+ var body={overview:orgOverview,detail:orgDetail,soap:orgSoap,emer:orgEmer}[S.ot]();
+ return '<div class="web"><nav class="side" aria-label="기관 메뉴"><div class="org">'+(y?'늘봄 요양원':'한빛구 보건소')+'</div><div class="orgn">'+(y?'2층 생활실':'방문건강관리팀')+'</div>'+
+  tabs.map(function(t){return '<button data-a="ot" data-id="'+t[0]+'" aria-selected="'+(S.ot===t[0])+'">'+t[1]+(t[0]==='emer'&&evc?'<span class="cnt">'+evc+'</span>':'')+'</button>';}).join('')+
+  '<div class="orgsw"><span>기관 유형</span><div><button data-a="orgtype" data-id="bogun" aria-selected="'+(!y)+'">보건소</button><button data-a="orgtype" data-id="yoyang" aria-selected="'+y+'">요양원</button></div></div></nav><section class="main">'+body+'</section></div>';
+}
+
+/* ---------- render ---------- */
+function render(){
+ var scrTop=$('scr')?$('scr').scrollTop:0;
+ $('stage').innerHTML=S.role==='elder'?renderElder():S.role==='guard'?renderGuard():renderOrg();
+ if($('scr')&&S._keepScroll)$('scr').scrollTop=scrTop;S._keepScroll=false;
+ document.querySelectorAll('.roles button').forEach(function(b){b.setAttribute('aria-selected',b.dataset.role===S.role);});
+ ['guard','org'].forEach(function(r){$('dot-'+r).classList.toggle('on',S.dots[r]&&S.role!==r);});
+}
+function renderPanel(){
+ $('scenes').innerHTML=SCENES.map(function(s){return '<button class="scene" data-scene="'+s.id+'" aria-pressed="'+(S.scene===s.id)+'"><i style="background:'+s.c+'"></i><div><b>'+s.name+'</b><span>'+s.desc+'</span></div></button>';}).join('');
+ $('hint').textContent=SCENES.filter(function(s){return s.id===S.scene;})[0].hint;
+ renderLog();
+}
+function renderLog(){
+ var W={elder:'어르신',guard:'보호자',org:'기관',sys:'신발'};
+ $('log').innerHTML=S.log.length?S.log.map(function(l){return '<li><span>'+l.t+'</span><span><i class="who">'+W[l.who]+'</i>'+l.text+'</span></li>';}).join(''):'<li class="log-empty">시나리오를 누르면 누가 어떤 알림을 받는지 여기에 표시돼요.</li>';
+}
+function soft(){S._keepScroll=true;render();}
+
+/* ---------- scenarios ---------- */
+function clearTimers(){clearInterval(fallTimer);clearInterval(walkTimer);clearInterval(moveTimer);timers.forEach(clearTimeout);timers=[];}
+function later(fn,ms){timers.push(setTimeout(fn,reduce?Math.min(ms,1200):ms));}
+function startScene(id){
+ clearTimers();var keepOrg=S?S.orgType:'bogun';S=fresh();S.orgType=keepOrg;S.scene=id;
+ var sc=SCENES.filter(function(s){return s.id===id;})[0];S.role=sc.role;
+ if(id==='change'){Object.assign(S.d,CHANGE);addLog('sys','3주간 보행 속도 13% 감소, 좌우 균형 39 : 61');addLog('guard','주간 알림과 이번 주 할 일 3가지');addLog('org','주의 대상으로 분류');addLog('elder','“구름 조금”과 천천히 걷기 안내');dot('guard',true);dot('org',true);}
+ if(id==='walk'){S.el='walk';startWalk();}
+ if(id==='wander'){S.gt='loc';startWander();}
+ if(id==='fall'){startFall();}
+ if(id==='device'){addLog('sys','제어 모듈 배터리 12%');addLog('guard','충전 알림');addLog('org','기기 확인 목록에 추가');addLog('elder','“신발 충전이 필요해요” 안내');dot('guard',true);dot('org',true);}
+ renderPanel();render();
+}
+function startWalk(){
+ S.walkCue=0;S.walkSteps=0;
+ walkTimer=setInterval(function(){S.walkSteps+=2;var n=document.querySelector('.el-note');if(n&&S.role==='elder'&&S.el==='walk')n.textContent='오늘 '+(M().steps+S.walkSteps).toLocaleString('ko-KR')+'걸음 걸으셨어요';},1100);
+ if(S.scene!=='walk')return;
+ later(function(){S.walkCue=1;addLog('sys','왼발 부하 40%로 쏠림 감지');addLog('elder','왼발 진동과 “왼발을 꾹 딛어 보세요” 안내');if(S.role==='elder'&&S.el==='walk')soft();},2200);
+ later(function(){S.walkCue=2;addLog('sys','좌우 균형 49 : 51로 회복');addLog('elder','“양발이 고르게 닿아요” 칭찬');if(S.role==='elder'&&S.el==='walk')soft();},7500);
+}
+function startWander(){
+ var pts=[[182,98],[200,84],[222,70],[240,58],[258,48],[272,40],[286,48],[284,62],[270,66],[258,58],[264,44],[278,38],[288,50],[280,64],[266,62]];
+ var i=0,seg=0;S.route={pos:{x:182,y:98},trail:['182,98'],dist:'약 160m'};S.wander={alerted:false,seen:false};
+ addLog('sys','경로당에서 나와 이동 시작');
+ moveTimer=setInterval(function(){
+  seg+=0.5;if(seg>=1){seg=0;i++;}if(i>=pts.length-1){i=6;}
+  var a=pts[i],b=pts[i+1],x=a[0]+(b[0]-a[0])*seg,y=a[1]+(b[1]-a[1])*seg;S.route.pos={x:x,y:y};S.route.trail.push(x.toFixed(0)+','+y.toFixed(0));if(S.route.trail.length>40)S.route.trail.shift();
+  var dm=Math.round(Math.hypot(x-100,y-160)*3/10)*10;S.route.dist='약 '+dm+'m';
+  if(!S.wander.alerted&&i>=7){S.wander.alerted=true;S.wander.t=hhmm();addLog('sys','같은 구역 반복 이동, 평소 길에서 300m 이상 이탈');addLog('guard','배회 의심 알림과 위치');addLog('org','응급 관제에 배회 의심 등록');addLog('elder','“집으로 가는 길 보기” 안내');dot('guard',true);dot('org',true);render();return;}
+  var me=document.querySelector('.map .me'),tr=document.querySelector('.map .trail');
+  if(me){me.setAttribute('cx',x.toFixed(1));me.setAttribute('cy',y.toFixed(1));}if(tr)tr.setAttribute('points',S.route.trail.join(' '));var gd=$('g-dist');if(gd)gd.textContent=S.route.dist;
+ },reduce?1000:450);
+}
+function startFall(){
+ S.fall={stage:1,left:10,t:hhmm(),resolved:null};S.route={pos:{x:112,y:186},trail:['100,160','108,176','112,186'],dist:'약 30m'};addLog('sys','강한 충격 후 움직임 없음');addLog('elder','“괜찮으세요?” 확인 화면');
+ fallTimer=setInterval(function(){
+  var f=S.fall;if(!f||f.resolved){clearInterval(fallTimer);return;}
+  f.left--;
+  if(f.left<=0){
+   if(f.stage===1){f.stage=2;f.left=10;addLog('guard','10초 무응답: 낙상 의심 알림, 응급 정보 카드');dot('guard',true);}
+   else if(f.stage===2){f.stage=3;f.left=0;addLog('org','20초 무응답: '+(S.orgType==='yoyang'?'늘봄 요양원':'한빛구 보건소')+' 응급 관제 등록');addLog('sys','119에 위치와 응급 정보 메시지 전송');dot('org',true);clearInterval(fallTimer);}
+   soft();return;
+  }
+  var c=document.querySelector('.emer .count');if(c&&S.role==='elder'){c.innerHTML=f.stage===1?f.left+'초 안에 답이 없으면<br>가족에게 알려요':'가족에게 알렸어요<br>'+f.left+'초 뒤 담당 기관과 119에 알려요';}
+  if(S.role==='guard'&&f.stage===2)soft();
+ },1000);
+}
+
+/* ---------- events ---------- */
+document.querySelector('.roles').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;S.role=b.dataset.role;S.dots[S.role]=false;render();});
+$('scenes').addEventListener('click',function(e){var b=e.target.closest('.scene');if(b)startScene(b.dataset.scene);});
+$('reset').addEventListener('click',function(){startScene('normal');});
+$('modal').addEventListener('click',function(e){if(e.target.id==='modal'||e.target.closest('[data-a="closemodal"]'))$('modal').classList.remove('show');});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')$('modal').classList.remove('show');});
+$('stage').addEventListener('input',function(e){if(e.target.dataset.a==='soapA')S.soap.A=e.target.value;});
+$('stage').addEventListener('change',function(e){var t=e.target;if(t.dataset.a==='check'){S.checks[t.dataset.id]=t.checked;soft();}});
+$('stage').addEventListener('click',function(e){
+ var b=e.target.closest('[data-a]');if(!b||b.dataset.a==='check'||b.dataset.a==='soapA')return;var a=b.dataset.a;
+ if(a==='voice'){var t=S.el==='walk'?(S.walkCue===1?'왼발을 조금 더 꾹 딛어 보세요':'지금처럼 걸어 보세요'):S.el==='result'?'잘하셨어요. 내일도 함께 걸어요':M().say+'. '+M().sub;speak(t);return;}
+ if(a==='walk'){S.el='walk';if(S.scene!=='walk'){S.walkCue=0;clearInterval(walkTimer);startWalk();}addLog('elder','걷기 시작');render();return;}
+ if(a==='endwalk'){S.el='result';clearInterval(walkTimer);addLog('elder','걷기 결과: 잘한 점과 다음 연습');addLog('guard','오늘 걸음 기록 갱신');render();return;}
+ if(a==='home'){S.el='home';render();return;}
+ if(a==='question'){S.el='question';render();return;}
+ if(a==='conf'){S.conf=+b.dataset.v;S.el='home';addLog('elder','이번 주 질문 응답: '+['괜찮아요','조금 걱정돼요','걱정돼요'][S.conf]);addLog('org','방문 기록 S 항목에 자동 반영');toast('답해 주셔서 고마워요');render();return;}
+ if(a==='fine'||a==='help'){
+  if(!S.fall)return;clearInterval(fallTimer);
+  if(a==='fine'){S.fall.resolved='ok';if(S.fall.stage<2)S.fall.stage=2;addLog('elder','“괜찮아요” 응답');addLog('guard','괜찮다고 응답하셨다는 알림');addLog('org','낙상 감지 해제 기록');dot('guard',true);toast('괜찮다고 가족에게 전했어요');}
+  else{S.fall.stage=3;addLog('elder','“도와주세요” 응답');addLog('guard','즉시 낙상 알림');addLog('org','응급 관제 등록, 119 메시지 전송');dot('guard',true);dot('org',true);}
+  S.el='home';render();return;}
+ if(a==='homeway'){toast('집까지 약 450m, 큰길을 따라 왼쪽으로 가세요 (음성 안내)');return;}
+ if(a==='callkid'||a==='callmom'){toast('시연 화면이라 실제로 전화를 걸지 않아요');return;}
+ if(a==='c119'){toast('시연 화면이라 실제로 신고하지 않아요');return;}
+ if(a==='guide'){addLog('guard','어머니 화면에 집 가는 길 띄움');addLog('elder','집으로 가는 길 안내 표시');toast('어머니 화면에 집으로 가는 길을 띄웠어요');return;}
+ if(a==='seenwander'){S.wander.seen=true;S.gt='loc';render();return;}
+ if(a==='closegem'){if(S.fall)S.fall.hide=true;render();return;}
+ if(a==='gt'){S.gt=b.dataset.id;if(S.gt==='loc'&&S.wander)S.wander.seen=true;render();return;}
+ if(a==='todo'){var id=b.dataset.id,l=b.dataset.l;if(l==='체크리스트'){S.gt='life';render();return;}S.todoDone[id]=true;toast(l==='전화하기'?'시연 화면이라 실제로 전화를 걸지 않아요':l==='상담 요청'?'담당 기관에 상담 요청을 보냈어요':l==='응원 보내기'?'응원을 보냈어요. 어머니 신발이 짧게 진동하고 음성으로 전해져요':'주말 산책 계획을 어머니 화면에 보냈어요');if(l==='상담 요청'){addLog('guard','상담 요청');addLog('org','보호자 상담 요청 접수');dot('org',true);}soft();return;}
+ if(a==='memo'){S.memoShared=true;addLog('guard','메모 공유: 왼쪽 무릎 통증');addLog('org','방문 기록 S 항목에 반영');soft();return;}
+ if(a==='remind'){addLog('guard','충전 안내 보냄');addLog('elder','“신발 충전이 필요해요” 안내');toast('어머니 화면에 충전 안내를 보냈어요');return;}
+ if(a==='ot'){S.ot=b.dataset.id;render();return;}
+ if(a==='orgtype'){S.orgType=b.dataset.id;render();return;}
+ if(a==='person'){S.person=b.dataset.id;S.ot='detail';render();return;}
+ if(a==='pchip'){var v=b.dataset.v,i=S.soap.P.indexOf(v);if(i>=0)S.soap.P.splice(i,1);else S.soap.P.push(v);soft();return;}
+ if(a==='sendp'){if(!S.soap.P.length){toast('보낼 연습을 먼저 골라 주세요');return;}S.practice=S.soap.P[0];addLog('org','계획 전송: '+S.soap.P.join(', '));addLog('elder','오늘의 연습이 “'+S.practice+'”으로 바뀜');toast('어르신 화면의 오늘의 연습을 바꿨어요');return;}
+ if(a==='summary'){var p=personData('me'),c=S.scene==='change';$('modal-box').innerHTML='<h3>보호자용 요약</h3><p>지난 방문 이후 어머니의 걸음은 '+(c?'조금 느려졌어요. 왼발에 힘이 덜 실리고, 새벽에 휘청이는 일이 늘었어요.':'꾸준히 좋아지고 있어요. 걷는 속도와 균형 모두 안정적이에요.')+'</p><p>'+(S.soap.P.length?'다음 방문까지 “'+S.soap.P.join('”, “')+'” 연습을 함께 챙겨 주세요.':'다음 방문까지 지금처럼 매일 걷도록 응원해 주세요.')+'</p>'+(c?'<p>침실에서 화장실 가는 길에 야간등을 놓아 주시면 좋아요.</p>':'')+'<button class="gbtn dark" data-a="closemodal">닫기</button>';$('modal').classList.add('show');addLog('org','보호자용 요약 생성');return;}
+ if(a==='savesoap'){addLog('org','방문 기록 저장');toast('방문 기록을 저장했어요');return;}
+ if(a==='evbtn'){if(b.dataset.l==='위치 보기'){window.scrollTo({top:document.querySelector('.blk.map').getBoundingClientRect().top+window.scrollY-20,behavior:reduce?'auto':'smooth'});return;}toast('119 출동 요청이 접수된 것으로 표시했어요 (시연)');return;}
+});
+
+/* guardian emergency overlay hide support */
+var _gEmer=gEmer;gEmer=function(){if(S.fall&&S.fall.hide)return '';return _gEmer();};
+
+/* ---------- guided tour for judges ---------- */
+var TOUR=[
+ {scene:'normal',role:'elder',el:'home',t:'어르신 화면이에요. 숫자 대신 날씨 그림과 “시장 혼자 다녀오기” 같은 목표 활동으로 오늘 걸음을 보여줘요. “듣기”를 눌러 음성 안내도 들어 보세요.'},
+ {scene:'walk',role:'elder',t:'걷는 중 화면이에요. 왼발에 힘이 덜 실리면 왼발 신발이 진동하고, 몇 초 뒤 걸음이 고르게 바뀌면 칭찬해 줘요.'},
+ {scene:'change',role:'guard',gt:'home',t:'걸음이 느려지고 한쪽으로 쏠리면 보호자에게 “이번 주 할 일”을 알려줘요. 버튼을 눌러 할 일을 해 보세요.'},
+ {scene:'change',role:'guard',gt:'trend',t:'보호자는 12주 동안의 걸음 변화를 참고선과 함께 쉬운 말로 확인해요.'},
+ {scene:'change',role:'org',ot:'overview',t:'보건소·요양원은 여러 어르신을 위험도 순으로 한 화면에서 봐요. 김순자 님이 “주의”로 올라와 있어요. 왼쪽 아래에서 요양원으로도 바꿔 보세요.'},
+ {scene:'change',role:'org',ot:'soap',t:'방문 기록(SOAP)의 S와 O는 자동으로 채워져요. 계획에서 연습을 골라 “어르신 화면으로 연습 보내기”를 눌러 보세요.'},
+ {scene:'wander',role:'guard',gt:'loc',t:'평소 길을 벗어나 같은 곳을 맴돌면 몇 초 뒤 보호자에게 배회 알림이 와요. 이동 경로를 지켜보세요.'},
+ {scene:'fall',role:'elder',t:'넘어짐이 감지되면 어르신께 먼저 물어요. 답하지 않으면 10초 뒤 보호자, 다시 10초 뒤 기관과 119로 알림이 가요. 위쪽 탭의 빨간 점을 따라가 보세요. 마지막 단계입니다.'}
+];
+var tourI=-1;
+function tourGo(i){
+ tourI=i;var T=TOUR[i],prev=TOUR[i-1];
+ if(!(prev&&prev.scene===T.scene&&S.scene===T.scene))startScene(T.scene);
+ S.role=T.role;S.dots[S.role]=false;if(T.gt)S.gt=T.gt;if(T.ot)S.ot=T.ot;if(T.el)S.el=T.el;
+ render();
+ $('tour').hidden=false;document.body.classList.add('touring');
+ $('tour-text').innerHTML='<b>체험 안내 '+(i+1)+' / '+TOUR.length+'</b>'+T.t;
+ $('tour-prev').disabled=i===0;$('tour-prev').style.opacity=i===0?.4:1;
+ $('tour-next').textContent=i===TOUR.length-1?'마치기':'다음';
+ if(window.innerWidth<=1100)$('stage').scrollIntoView({behavior:reduce?'auto':'smooth',block:'start'});
+}
+function tourEnd(){tourI=-1;$('tour').hidden=true;document.body.classList.remove('touring');toast('왼쪽(휴대폰에서는 아래쪽) 시연 시나리오로 자유롭게 눌러 보세요');}
+$('tour-next').addEventListener('click',function(){if(tourI>=TOUR.length-1)tourEnd();else tourGo(tourI+1);});
+$('tour-prev').addEventListener('click',function(){if(tourI>0)tourGo(tourI-1);});
+$('tour-close').addEventListener('click',tourEnd);
+$('tourstart').addEventListener('click',function(){tourGo(0);});
+
+S=fresh();renderPanel();render();
+tourGo(0);
+})();
+</script>
+</body>
+</html>
